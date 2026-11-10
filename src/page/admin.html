@@ -1,0 +1,59 @@
+<div style="padding: 30px;">
+	<h1 style="text-align: center;">Панель администрирования</h1>
+	<hr>
+	<h2>Сгенерировать пользователей</h2>
+	<form style="display: flex; flex-direction: column; gap: 15px;" method="post">
+		<div style="display: flex; gap: 10px;">
+			<label for="field__count">Количество</label>
+			<input id="field__count" type="number" name="generate_users" min="3" max="40" value="12">
+		</div>
+		<input type="submit" value="Сгенерировать">
+	</form>
+	<br><br>
+	<form style="display: flex; flex-direction: column; gap: 15px;" method="post">
+		<input type="hidden" name="user_add" value="1">
+		<input type="submit" value="Добавить пользователя">
+	</form>
+	<hr>
+	<h2>Пользователи</h2>
+	<table style="width: 100%; text-align: center;">
+		<thead>
+			<tr>
+				<th>UID</th>
+				<th>Готов?</th>
+				<th>Действие</th>
+			</tr>
+		</thead>
+		<tbody>
+			<TPL:USER>
+				<tr>
+					<td><a href="/l/{s}" target="_blank">{s}</a></td>
+					<td>{s}</td>
+					<td>
+						<form method="post">
+							<input type="hidden" name="del_user" value="{s}">
+							<input type="submit" value="Удалить">
+						</form>
+					</td>
+				</tr>
+			</TPL:USER>
+		</tbody>
+	</table>
+	<hr>
+	<h2>Состояние</h2>
+	<div id="status" style="display:none">{s}</div>
+	<p id="status_not_ready" style="display: none">Не все игроки готовы начать. Ожидание игроков...</p>
+	<div id="stop_game" style="display: none">
+		<form method="POST">
+			<input type="hidden" name="game_status" value="stop">
+			<input type="submit" value="Остановить игру">
+		</form>
+	</div>
+	<div id="start_game" style="display: none">
+		<form method="POST">
+			<input type="hidden" name="game_status" value="start">
+			<input type="submit" value="Запустить игру">
+		</form>
+	</div>
+</div>
+<script src="/script_admin.js"></script>

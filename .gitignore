@@ -1,0 +1,6 @@
+letters
+zig-out
+zig-pkg
+.zig-cache
+*.sublime-*
+state

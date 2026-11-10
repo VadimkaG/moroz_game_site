@@ -1,0 +1,27 @@
+<h2>Письмо деду морозу</h2>
+<div id="letter">
+	<div class="letter-hint saved">Письмо успешно сохранено!</div>
+	<div class="letter-hint error">Ошибка отправки!</div>
+	<form class="letter-form">
+		<div class="field-wrapper">
+			<label for="field__name">От кого</label>
+			<input id="field__name" type="text" name="name" minlength="2" maxlength="30" required value="{s}">
+			<div class="char-counter"><span id="field__name__char_count"></span> / 30</div>
+		</div>
+		<div class="field-wrapper">
+			<label for="field__message">Содержание письма</label>
+			<textarea id="field__message" name="message" required minlength="10" maxlength="10000">{s}</textarea>
+			<div class="char-counter"><span id="field__message__char_count"></span> / 10000</div>
+		</div>
+		<div>
+			<input id="field__not_ready" type="checkbox" name="not_ready">
+			<label for="field__not_ready">Не готов</label>
+		</div>
+		<button type="button" class="letter-submit">{s}</button>
+	</form>
+</div>
+<div id="letter-success" class="letter-success">
+	<p>Вы готовы к игре! Теперь ожидаем других участников...</p>
+	<p>Пока вы ждете можете заглянуть <a href="/">на главную страницу</a>, чтобы увидеть сколько участников готово к игре.</p>
+	<p>До начала игры вы в любой момент можете изменить письмо, вернувшись на эту страницу.</p>
+</div>
