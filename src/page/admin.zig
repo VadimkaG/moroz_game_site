@@ -51,29 +51,24 @@ fn constantTimeEql(a: []const u8, b: []const u8) bool {
 
 fn checkCsrf(req: *httpz.Request) bool {
     if (req.header("sec-fetch-site")) |sfs| {
-        if (!std.mem.eql(u8, sfs, "same-origin") and !std.mem.eql(u8, sfs, "none")) {
-            return false;
-        }
+        return std.mem.eql(u8, sfs, "same-origin") or std.mem.eql(u8, sfs, "none");
     }
     if (req.header("origin")) |origin| {
-        if (req.header("host")) |host| {
-            const after_scheme = if (std.mem.startsWith(u8, origin, "https://"))
-                origin[8..]
-            else if (std.mem.startsWith(u8, origin, "http://"))
-                origin[7..]
-            else
-                return false;
-            if (!std.mem.eql(u8, after_scheme, host)) {
-                return false;
-            }
-        }
+        const expected_host = req.header("x-forwarded-host") orelse req.header("host") orelse return true;
+        const after_scheme = if (std.mem.startsWith(u8, origin, "https://"))
+            origin[8..]
+        else if (std.mem.startsWith(u8, origin, "http://"))
+            origin[7..]
+        else
+            return false;
+        return std.ascii.eqlIgnoreCase(after_scheme, expected_host);
     }
     return true;
 }
 
 fn setSecurityHeaders(res: *httpz.Response) void {
     res.header("Cache-Control", "no-store");
-    res.header("Referrer-Policy", "no-referrer");
+    res.header("Referrer-Policy", "same-origin");
     res.header("X-Frame-Options", "DENY");
     res.header("X-Content-Type-Options", "nosniff");
 }
