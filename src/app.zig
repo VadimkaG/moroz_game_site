@@ -47,6 +47,7 @@ pub fn clearUsers(self: *@This()) void {
         self.allocator.free(key_ptr.*);
     }
     self.users.clearRetainingCapacity();
+    self.ready_count = 0;
 }
 /// Страница не найдена
 pub fn notFound(_: *@This(), _: *httpz.Request, res: *httpz.Response) !void {
@@ -58,7 +59,7 @@ pub fn uncaughtError(_: *@This(), req: *httpz.Request, res: *httpz.Response, err
     std.debug.print("uncaught http error at {s}: {}\n", .{ req.url.path, errr });
 
     res.headers.add("content-type", "text/html; charset=utf-8");
-    res.status = 505;
+    res.status = 500;
     res.body = "<!DOCTYPE html>(╯°□°)╯︵ ┻━┻";
 }
 /// Синхронизация мультипоточности
@@ -139,7 +140,7 @@ pub fn load(self: *@This()) !void {
 
         // Начата ли игра
         if (std.mem.find(u8, slice, "\n")) |i| {
-            if (slice[i - 1] == '1') {
+            if (i > 0 and slice[i - 1] == '1') {
                 self.is_game_started = true;
             } else self.is_game_started = false;
             slice = slice[i + 1 ..];
@@ -170,32 +171,38 @@ pub fn load(self: *@This()) !void {
             if (std.mem.find(u8, slice, "\t")) |i| {
                 uid = try self.allocator.alloc(u8, i);
                 @memcpy(uid, slice[0..i]);
-                if (i + 1 > slice.len)
+                if (i + 1 > slice.len) {
+                    self.allocator.free(uid);
                     return;
+                }
                 slice = slice[i + 1 ..];
             } else return;
 
             // Готов ли пользователь
             if (std.mem.find(u8, slice, "\t")) |i| {
-                if (slice[i - 1] == '1') {
+                if (i > 0 and slice[i - 1] == '1') {
                     is_ready = true;
                     self.ready_count += 1;
                 } else is_ready = false;
                 slice = slice[i + 1 ..];
-            } else return;
+            } else {
+                self.allocator.free(uid);
+                return;
+            }
 
             // Target
             if (std.mem.find(u8, slice, "\n")) |i| {
+                const target_slice = slice[0..i];
+                slice = slice[i + 1 ..];
+                try self.users.put(uid, .{ .uid = uid, .target = &.{}, .is_ready = is_ready });
                 try targets_list.append(arena_allocator, .{
                     .uid = uid,
-                    .target = slice[0..i],
+                    .target = target_slice,
                 });
-                if (i + 1 > slice.len)
-                    return;
-                slice = slice[i + 1 ..];
-            } else return;
-
-            try self.users.put(uid, .{ .uid = uid, .target = &.{}, .is_ready = is_ready });
+            } else {
+                self.allocator.free(uid);
+                return;
+            }
         }
     }
 }

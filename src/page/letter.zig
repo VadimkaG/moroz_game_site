@@ -33,7 +33,15 @@ fn htmlEscapeN(allocator: std.mem.Allocator, dest: *std.ArrayList(u8), src: []co
     }
 }
 
+fn setSecurityHeaders(res: *httpz.Response) void {
+    res.header("Cache-Control", "no-store");
+    res.header("Referrer-Policy", "no-referrer");
+    res.header("X-Frame-Options", "DENY");
+    res.header("X-Content-Type-Options", "nosniff");
+}
+
 pub fn handle(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
+    setSecurityHeaders(res);
     const userId = req.param("uid") orelse {
         res.status = 400;
         return;
@@ -81,6 +89,7 @@ pub fn handle(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
             else => return err,
         };
         if (file_opt) |*file| {
+            defer file.close(app.io);
             const file_stat = try file.stat(app.io);
             const file_buffer = try res.arena.alloc(u8, file_stat.size);
             const amt = try file.readPositionalAll(app.io, file_buffer, 0);
@@ -123,19 +132,24 @@ pub fn handle(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
         }
     }
 
-    try writer.print(letter_form_html, .{
-        // Содержимое поля имени
-        "",
-        // Содержимое письма
-        "",
-        // Название кнопки
-        "Отправить письмо",
-    });
+    if (is_game_started) {
+        try writer.writeAll("<h2>Упс...</h2><p>Письмо не найдено. Сообщи организатору.</p>");
+    } else {
+        try writer.print(letter_form_html, .{
+            // Содержимое поля имени
+            "",
+            // Содержимое письма
+            "",
+            // Название кнопки
+            "Отправить письмо",
+        });
+    }
     try writer.writeAll(IndexPage.Template.after[0..]);
     try writer.writeAll(Layout.Footer);
 }
 /// Собственное письмо
 pub fn handleMy(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
+    setSecurityHeaders(res);
     const userId = req.param("uid") orelse {
         res.status = 400;
         return;
@@ -172,6 +186,7 @@ pub fn handleMy(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
             else => return err,
         };
         if (file_opt) |*file| {
+            defer file.close(app.io);
             const file_stat = try file.stat(app.io);
             const file_buffer = try res.arena.alloc(u8, file_stat.size);
             const amt = try file.readPositionalAll(app.io, file_buffer, 0);
@@ -203,35 +218,49 @@ pub fn handleMy(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
 }
 /// Обработка формы
 pub fn handleForm(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
+    setSecurityHeaders(res);
     const userId = req.param("uid") orelse {
         res.status = 400;
         return;
     };
-    {
-        try app.lock();
-        defer app.unlock();
-        if (app.is_game_started) {
-            res.status = 403;
-            return;
-        }
-        if (!app.users.contains(userId)) {
-            res.body = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>Дедушка Морозушка</title></head><body><h1>Упс...</h1><p>Похоже что ссылка не действительна.</p></body></html>";
-            res.status = 404;
-            return;
-        }
-    }
 
     var form = try req.formData();
     if (form.get("name")) |f_name| {
         if (form.get("message")) |f_message| {
-            const f_name_len = try std.unicode.utf8CountCodepoints(f_name);
-            const f_message_len = try std.unicode.utf8CountCodepoints(f_message);
+            var clean_name_list = try std.ArrayList(u8).initCapacity(res.arena, f_name.len);
+            for (f_name) |b| {
+                if (b != '\n' and b != '\r') {
+                    try clean_name_list.append(res.arena, b);
+                }
+            }
+            const clean_name = clean_name_list.items;
+
+            const f_name_len = std.unicode.utf8CountCodepoints(clean_name) catch {
+                res.status = 400;
+                return;
+            };
+            const f_message_len = std.unicode.utf8CountCodepoints(f_message) catch {
+                res.status = 400;
+                return;
+            };
 
             // Проверка длинны
             if (f_name_len < 2 or f_name_len > 30 or f_message_len < 10 or f_message_len > 10000) {
                 res.status = 400;
                 return;
             }
+
+            try app.lock();
+            defer app.unlock();
+            if (app.is_game_started) {
+                res.status = 403;
+                return;
+            }
+            const user = app.users.getPtr(userId) orelse {
+                res.body = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>Дедушка Морозушка</title></head><body><h1>Упс...</h1><p>Похоже что ссылка не действительна.</p></body></html>";
+                res.status = 404;
+                return;
+            };
 
             const cwd = std.Io.Dir.cwd();
             cwd.createDir(app.io, LETTERS_DIR_NAME, .executable_file) catch |err| switch (err) {
@@ -247,40 +276,28 @@ pub fn handleForm(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
 
             var file_buffer: [4096]u8 = undefined;
             var file_writer = file.writer(app.io, &file_buffer);
-            for (f_name) |b| {
-                if (b != '\n' and b != '\r') {
-                    try file_writer.interface.writeByte(b);
-                }
-            }
+            try file_writer.interface.writeAll(clean_name);
             try file_writer.interface.writeAll("\n");
             try file_writer.interface.writeAll(f_message);
 
             try file_writer.flush();
 
-            {
-                try app.lock();
-                defer app.unlock();
-                if (form.get("not_ready")) |is_not_ready| {
-                    if (app.users.getPtr(userId)) |user| {
-                        const is_ready = !(std.mem.eql(u8, is_not_ready, "true") or std.mem.eql(u8, is_not_ready, "on"));
-                        if (is_ready and !user.is_ready) {
-                            user.is_ready = true;
-                            app.ready_count += 1;
-                            try app.save();
-                        } else if (!is_ready and user.is_ready) {
-                            user.is_ready = false;
-                            app.ready_count -= 1;
-                            try app.save();
-                        }
-                    }
-                } else {
-                    if (app.users.getPtr(userId)) |user| {
-                        if (!user.is_ready) {
-                            user.is_ready = true;
-                            app.ready_count += 1;
-                            try app.save();
-                        }
-                    }
+            if (form.get("not_ready")) |is_not_ready| {
+                const is_ready = !(std.mem.eql(u8, is_not_ready, "true") or std.mem.eql(u8, is_not_ready, "on"));
+                if (is_ready and !user.is_ready) {
+                    user.is_ready = true;
+                    app.ready_count += 1;
+                    try app.save();
+                } else if (!is_ready and user.is_ready) {
+                    user.is_ready = false;
+                    app.ready_count -= 1;
+                    try app.save();
+                }
+            } else {
+                if (!user.is_ready) {
+                    user.is_ready = true;
+                    app.ready_count += 1;
+                    try app.save();
                 }
             }
 

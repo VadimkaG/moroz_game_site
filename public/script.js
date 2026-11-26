@@ -81,8 +81,9 @@ document.addEventListener('DOMContentLoaded', () => {
 			} catch (error) {
 				errorHint.classList.add('active');
 				setTimeout(() => errorHint.classList.remove('active'), 3000);
+			} finally {
+				in_senging_state = false;
 			}
-			in_senging_state = false;
 		});
 	}
 
@@ -100,7 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
 			is_loading = true;
 			fetch(letter_a.href)
 				.then(response => {
-					is_loading = false;
 					if (!response.ok) {
 						throw new Error(`Ошибка: ${response.status}`);
 					}
@@ -110,6 +110,10 @@ document.addEventListener('DOMContentLoaded', () => {
 					myletter_content.innerHTML = htmlString;
 					letter.style="display:none";
 					myletter.style="";
+				})
+				.catch(() => {})
+				.finally(() => {
+					is_loading = false;
 				});
 		});
 		const comeback_a = document.getElementById('comeback');
