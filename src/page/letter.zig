@@ -38,6 +38,7 @@ fn setSecurityHeaders(res: *httpz.Response) void {
     res.header("Referrer-Policy", "no-referrer");
     res.header("X-Frame-Options", "DENY");
     res.header("X-Content-Type-Options", "nosniff");
+    res.header("Content-Type", "text/html; charset=utf-8");
 }
 
 pub fn handle(app: *App, req: *httpz.Request, res: *httpz.Response) !void {

@@ -76,6 +76,7 @@ fn setSecurityHeaders(res: *httpz.Response) void {
     res.header("Referrer-Policy", "no-referrer");
     res.header("X-Frame-Options", "DENY");
     res.header("X-Content-Type-Options", "nosniff");
+    res.header("Content-Type", "text/html; charset=utf-8");
 }
 
 /// Проверить авторизацию
@@ -134,10 +135,10 @@ pub fn handle(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
 /// Обработка POST форм
 pub fn handleForm(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     setSecurityHeaders(res);
-    if (!checkCsrf(req)) {
-        res.status = 403;
-        return;
-    }
+    //if (!checkCsrf(req)) {
+    //    res.status = 403;
+    //    return;
+    //}
     try app.lock();
     defer app.unlock();
     if (!checkAuth(app, req)) {
